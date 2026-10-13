@@ -74,7 +74,7 @@ RUN set -euxo pipefail; \
 
 
 #----------
-# set user and working directry
+# set user and working directory
 #----------
 USER latex
 WORKDIR /workdir
