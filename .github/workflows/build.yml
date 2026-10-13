@@ -1,4 +1,4 @@
-name: Build and Push "docker-test" Images
+name: Build and Release Docker Image
 
 on:
   workflow_dispatch:  # 手動のActionsトリガー
