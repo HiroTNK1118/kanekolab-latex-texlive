@@ -10,10 +10,9 @@ ENV LC_ALL=C
 
 
 #----------
-# install TeX Live 2024
+# install TeX Live 2026 and packages
 #----------
-# define TeXLive version and CTAN mirror
-ARG TEXLIVE_VERSION=2024
+ARG TEXLIVE_VERSION=2026
 ARG TEXLIVE_MIRROR="https://mirror.ctan.org/systems/texlive/tlnet"
 # install TeXLive from CTAN mirror
 RUN mkdir /tmp/install-tl-unx && \
