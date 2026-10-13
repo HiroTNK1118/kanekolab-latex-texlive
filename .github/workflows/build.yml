@@ -24,102 +24,62 @@ jobs:
   tag:
     name: Create Image/Release tag
     runs-on: ubuntu-latest
-    # リポジトリを参照する権限を付与
-    permissions:
-      contents: read
-    # イメージタグを後続のjobに渡すoutputs
-    outputs:
-      tag: ${{ steps.tag.outputs.TAG }}
-      prevtag: ${{ steps.tag.outputs.PREVTAG }}
-    steps:
-      # GitHubリポジトリをチェックアウト
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: -1
-      # イメージタグの生成
-      - name: create tag
-        id: tag
-        run: |
-          patch=0
-          PREVTAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
-          IFS='.' read -r major minor patch <<< "$PREVTAG"
-          if [[ "$major" == "${{ env.TEXLIVE_VER }}" && "$minor" == "${{ env.IMAGE_VER }}" ]]; then
-            patch=$((patch + 1))
-          fi
-          echo "PREVTAG=$PREV_TAG" >> "$GITHUB_OUTPUT"
-          echo "TAG=${{ env.TEXLIVE_VER }}.${{ env.IMAGE_VER }}.${patch}" >> "$GITHUB_OUTPUT"
-    
-  build:
-    name: Build image and Publish to GHCR
-    needs: 
-      - tag
-    # アーキテクチャごとにジョブを分割
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: self-hosted
-    # アーキテクチャごとランナーを分ける        
-    runs-on: ${{ matrix.runner }}
-    # イメージをプッシュする権限を付与
-    permissions:
-      contents: read  # コードを読み取る権限
-      packages: write  # ghcr.ioにパッケージをpushする権限
-    steps:
-      # GitHubリポジトリをチェックアウト
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: -1
 
-      # ghcr.ioにログイン
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      
+      - name: Create revision version
+        id: rev
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE="${TEXLIVE_VER}.${IMAGE_VER}"
+          REV=0
+
+          while git show-ref --verify --quiet "refs/tags/${BASE}.${REV}"; do
+            REV=$((REV + 1))
+          done
+
+          echo "rev=${REV}" >> "$GITHUB_OUTPUT"
+
+
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        
-      # QEMUのセットアップ
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: linux/${{ matrix.arch }}
-      
-      # Docker Buildxのセットアップ
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v3
 
-      # メタデータを生成（latestタグを追加）
-      - name: Extract metadata for Docker image
+      - name: Exctract metadata (tags, labels) for Docker image
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/hirotnk1118/${{ env.IMAGE_NAME }}
-          tags: type=raw,value=${{ needs.tag.outputs.tag }}-${{ matrix.arch }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ env.TEXLIVE_VER }}.${{ env.IMAGE_VER }}.${{ steps.rev.outputs.rev }}
 
-      # Dockerイメージをビルドしてghcr.ioにプッシュ
-      - name: Build and push Docker image
-        # timeout-minutes: ${{ matrix.build-time }}
-        uses: docker/build-push-action@v5
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push image
+        uses: docker/build-push-action@v7
         with:
-          builder: ${{ steps.buildx.outputs.name }}
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64
           push: true
-          # 対応するアーキテクチャを指定
-          platforms: linux/${{ matrix.arch }}
-          # イメージタグを指定
           tags: ${{ steps.meta.outputs.tags }}
-          # キャッシュの利用
-          # cache-from: type=gha
-          cache-from: type=gha,scope=docker-test-${{ matrix.arch }}
-          # cache-to: type=gha,mode=max
-          cache-to: type=gha,mode=max,scope=docker-test-${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           provenance: false
 
   manifest:
