@@ -14,47 +14,63 @@ ENV LC_ALL=C
 #----------
 ARG TEXLIVE_VERSION=2026
 ARG TEXLIVE_MIRROR="https://mirror.ctan.org/systems/texlive/tlnet"
-# install TeXLive from CTAN mirror
-RUN mkdir /tmp/install-tl-unx && \
-    curl -L ${TEXLIVE_MIRROR}/install-tl-unx.tar.gz | tar -xzv -C /tmp/install-tl-unx --strip-components=1 && \
-    /bin/echo -e \
-    'selected_scheme scheme-basic\ntlpdbopt_install_docfiles 0\ntlpdbopt_install_srcfiles 0' \
-    > /tmp/install-tl-unx/texlive.profile && \
-    /tmp/install-tl-unx/install-tl --repository ${TEXLIVE_MIRROR} -profile /tmp/install-tl-unx/texlive.profile && \
-    rm -r /tmp/install-tl-unx && \
-    ln -sf /usr/local/texlive/${TEXLIVE_VERSION}/bin/$(uname -m)-linux /usr/local/texlive/bin
 
+# Use Bash to detect failures in pipelines.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-#----------
-# install TeX Live packages and others
-#----------
-RUN tlmgr install \
-    collection-bibtexextra \
-    collection-latexextra \
-    collection-latexrecommended \
-    collection-luatex \
-    collection-langjapanese \
-    collection-mathscience \
-    collection-pictures \
-    latexmk \
-    latexdiff \
-    stix2-otf \
-    latexindent && \
-    mktexlsr && \
-    # install create_font_cache.sh
-    curl -L -O https://raw.githubusercontent.com/being24/latex-docker/master/create_font_cache.sh && \
-    chmod +x create_font_cache.sh && \
-    ./create_font_cache.sh && \
-    rm create_font_cache.sh && \
-    # install tex-fmt
-    curl -L -o tex-fmt.tar.gz https://github.com/WGUNDERWOOD/tex-fmt/releases/latest/download/tex-fmt-$(uname -m)-linux.tar.gz && \
-    tar -xzvf tex-fmt.tar.gz && \
-    mv tex-fmt /usr/local/bin && \
-    rm tex-fmt.tar.gz && \
-    # add user "latex" and set permissions
-    useradd -m -s /bin/bash latex && \
-    chown -R latex:latex /usr/local/texlive && \
-    chmod u+w /usr/local/texlive
+RUN set -euxo pipefail; \
+    \
+    # Install TeX Live
+    mkdir -p /tmp/install-tl-unx; \
+    curl -fsSL "${TEXLIVE_MIRROR}/install-tl-unx.tar.gz" \
+        | tar -xz -C /tmp/install-tl-unx --strip-components=1; \
+    printf '%s\n' \
+        'selected_scheme scheme-basic' \
+        'tlpdbopt_install_docfiles 0' \
+        'tlpdbopt_install_srcfiles 0' \
+        > /tmp/install-tl-unx/texlive.profile; \
+    /tmp/install-tl-unx/install-tl \
+        --repository "${TEXLIVE_MIRROR}" \
+        -profile /tmp/install-tl-unx/texlive.profile; \
+    rm -rf /tmp/install-tl-unx; \
+    ln -sfn \
+        "/usr/local/texlive/${TEXLIVE_VERSION}/bin/$(uname -m)-linux" \
+        /usr/local/texlive/bin; \
+    \
+    # Install TeX Live packages without documentation and source files
+    tlmgr option docfiles 0; \
+    tlmgr option srcfiles 0; \
+    tlmgr install \
+        collection-bibtexextra \
+        collection-latexextra \
+        collection-latexrecommended \
+        collection-luatex \
+        collection-langjapanese \
+        collection-mathscience \
+        collection-pictures \
+        latexmk \
+        latexdiff \
+        stix2-otf \
+        latexindent; \
+    \
+    # Remove any remaining documentation and source files
+    rm -rf \
+        "/usr/local/texlive/${TEXLIVE_VERSION}/texmf-dist/doc" \
+        "/usr/local/texlive/${TEXLIVE_VERSION}/texmf-dist/source"; \
+    mktexlsr; \
+    \
+    # Install create_font_cache.sh and generate font cache
+    curl -fsSL \
+        -o /tmp/create_font_cache.sh \
+        https://raw.githubusercontent.com/HiroTNK1118/kanekolab-latex-texlive/main/create_font_cache.sh; \
+    chmod +x /tmp/create_font_cache.sh; \
+    /tmp/create_font_cache.sh; \
+    rm -f /tmp/create_font_cache.sh; \
+    \
+    # Add user "latex" and prepare working directory
+    useradd -m -s /bin/bash latex; \
+    mkdir -p /workdir; \
+    chown latex:latex /workdir
 
 
 #----------
