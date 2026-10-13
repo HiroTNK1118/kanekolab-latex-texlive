@@ -1,13 +1,18 @@
 name: Build and Release Docker Image
 
 on:
-  workflow_dispatch:  # 手動のActionsトリガー
   push:
     branches:
-      - main  # mainブランチにpushされたときに実行
+      - main
     paths:
-      - 'Dockerfile'
-      - '.github/workflows/build.yml'
+      - Dockerfile
+      - .github/workflows/build.yml
+
+  workflow_dispatch:
+
+concurrency:
+  group: docker-release-${{ github.repository }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
