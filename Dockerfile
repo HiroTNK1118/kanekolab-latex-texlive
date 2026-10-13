@@ -1,7 +1,7 @@
 #----------
-# install base image (ghcr.io/hirotnk1118/docker-test-base)
+# install base image (ghcr.io/hirotnk1118/kanekolab-latex-base)
 #----------
-FROM ghcr.io/hirotnk1118/docker-test-base:24.2.0
+FROM ghcr.io/hirotnk1118/kanekolab-latex-base:26.2.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NOWARNINGS=yes
